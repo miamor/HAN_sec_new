@@ -1,0 +1,46 @@
+{
+    "input_report_folder": "../Dataset/cuckoo_ADung",
+    "input_data_folder": "data_json/cuckoo_ADung",
+    "input_pickle_folder": "data_pickle/cuckoo_ADung__iapi__vocablower_iapi__doc2vec",
+
+
+    "from_pickle": true,
+    "from_report_folder": false,
+    "from_data_json": false,
+
+    "vocab_path": "data_vocab/vocablower_iapi",
+
+
+    "train_embedding_path": "data_embedding/cuckoo_ADung__iapi__doc2vec",
+    
+    "train_embedder": false,
+    "edge_embedder": "doc2vec",
+    "node_embedder": "doc2vec",
+
+    
+    "use_interesting_apis": true,
+    "prepend_vocab": false,
+
+
+    "mapping_path": "data/mapping_benign_malware.json",
+
+    
+    "split_train_test": false,
+    "train_list_file": "data/train_list_8563.txt",
+    "test_list_file": "data/test_list_8563.txt",
+
+
+    "max_ft": 100000,
+    "top_k": 3,
+
+    "vector_size": 10,
+    "dm": 0,
+    
+    "model_configs": {
+        "layer_type": "edGNNLayer",
+        "layer_params": {
+            "n_units": [32,32,32],
+            "activation": ["relu", "relu", "relu"]
+        }
+    }
+}
