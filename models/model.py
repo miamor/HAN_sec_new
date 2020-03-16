@@ -1,5 +1,5 @@
 """
-Model Interface (GAT_)
+Model Interface
 """
 import copy
 import importlib
@@ -17,7 +17,7 @@ from dgl import DGLGraph
 from utils.utils import compute_node_degrees
 from utils.constants import *
 
-from models.layers.gat_ import GATLayer, MultiHeadGATLayer
+from models.layers.gat import GATLayer, MultiHeadGATLayer
 from models.layers.edgnn import edGNNLayer
 from models.layers.rgcn import RGCNLayer
 

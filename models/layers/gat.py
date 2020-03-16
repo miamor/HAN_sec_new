@@ -7,7 +7,7 @@ from utils.constants import GNN_MSG_KEY, GNN_NODE_FEAT_IN_KEY, GNN_NODE_FEAT_OUT
 
 
 class GATLayer(nn.Module):
-    def __init__(self, g, node_dim, edge_ft_out_dim, z_node_lv_dim, out_dim):
+    def __init__(self, g, node_dim, edge_ft_out_dim, out_dim):
         super(GATLayer, self).__init__()
         self.g = g
 
@@ -16,12 +16,10 @@ class GATLayer(nn.Module):
         edge_lbl_dim = self.g.edata[GNN_EDGE_LABELS_KEY].shape[1]
         # edge_ft_out_dim = edge_lbl_dim
 
-        # z_node_lv_dim = out_dim
-
         self.weighted_agg_edge = WeightedAggEdge(g, node_dim, edge_lbl_dim, edge_ft_out_dim)
-        # self.node_lv = NodeLevelGAT(g, node_dim, edge_ft_out_dim, z_node_lv_dim)
+        # self.node_lv = NodeLevelGAT(g, node_dim, edge_ft_out_dim, out_dim)
         self.node_lv = NodeLevelGAT(g, node_dim, edge_ft_out_dim, out_dim)
-        # self.semantic_lv = SemLevelGAT(g, z_node_lv_dim, out_dim)
+        # self.semantic_lv = SemLevelGAT(g, out_dim, out_dim)
 
 
     def forward(self, node_features, g):
@@ -99,6 +97,23 @@ class WeightedAggEdge(nn.Module):
     #     ft_concat__fc = self.linear(ft_concat)
     #     return {'z_concat_edges', ft_concat}
 
+    def edge_weight_src(self, edges):
+        # print('num edges', len(edges))
+        # e_fc = self.fc(edges.data[GNN_EDGE_LABELS_KEY])
+
+        e_ft = edges.data[GNN_EDGE_LABELS_KEY]
+        src_ft = edges.src['node_feat']
+
+        z2 = torch.cat([e_ft, src_ft], dim=1)
+        a = self.e_attn_fc(z2)
+        e = F.leaky_relu(a)
+        gamma = F.softmax(e, dim=1)
+        e_weighted = gamma * edata_filtered
+        edges.data['e_weighted'][loc] = e_weighted
+
+        return {'e_weighted': edges.data['e_weighted'], 'src_id': edges.src['nid'], 'dst_id': edges.dst['nid']}
+
+
     def edge_weight(self, edges):
         # print('num edges', len(edges))
         # e_fc = self.fc(edges.data[GNN_EDGE_LABELS_KEY])
@@ -129,13 +144,6 @@ class WeightedAggEdge(nn.Module):
 
         return {'e_weighted': edges.data['e_weighted'], 'src_id': edges.src['nid'], 'dst_id': edges.dst['nid']}
 
-        # z2 = torch.cat([edges.data[GNN_EDGE_LABELS_KEY], edges.src['node_feat']], dim=1)
-        # a = self.e_attn_fc(z2)
-        # e = F.leaky_relu(a)
-        # gamma = F.softmax(e, dim=1)
-        # e_weighted = gamma * edges.data[GNN_EDGE_LABELS_KEY]
-        return {'e_weighted': e_weighted}
-
 
     def forward(self, h, g):
         if g is not None:
@@ -148,7 +156,9 @@ class WeightedAggEdge(nn.Module):
         # self.g.edata['e_weighted'] = self.g.edata[GNN_EDGE_LABELS_KEY]
         self.g.edata['e_weighted'] = self.fc(self.g.edata[GNN_EDGE_LABELS_KEY])
 
-        self.g.group_apply_edges(func=self.edge_weight, group_by='src')
+        # self.g.group_apply_edges(func=self.edge_weight, group_by='src')
+        
+        self.g.group_apply_edges(func=self.edge_weight_src, group_by='src')
         print('Done calculating e_weighted!')
 
         return self.g.ndata.pop('node_feat')
@@ -159,16 +169,16 @@ class NodeLevelGAT(nn.Module):
     """
     Weight by neighbor nodes
     """
-    def __init__(self, g, node_in_dim, edge_ft_dim, z_node_lv_dim):
+    def __init__(self, g, node_in_dim, edge_ft_dim, out_dim):
         super(NodeLevelGAT, self).__init__()
         self.g = g
 
         # equation (1)
-        # self.fc = nn.Linear(node_in_dim, z_node_lv_dim, bias=False)
+        # self.fc = nn.Linear(node_in_dim, out_dim, bias=False)
         # equation (2)
         self.attn_fc = nn.Linear(node_in_dim + edge_ft_dim  +  node_in_dim, 1, bias=False)
 
-        self.fc2 = nn.Linear(node_in_dim + edge_ft_dim, z_node_lv_dim, bias=False)
+        self.fc2 = nn.Linear(node_in_dim + edge_ft_dim, out_dim, bias=False)
 
 
     def concat_sum_edge_node_ft(self, edges):
@@ -223,7 +233,8 @@ class NodeLevelGAT(nn.Module):
 
 
     def edge_att(self, edges):
-        en_ft = edges.data['e_weighted_sum_concat_node_ft']
+        # en_ft = edges.data['e_weighted_sum_concat_node_ft']
+        en_ft = edges.data['e_weighted']
 
         src_nodes_ids = edges.data['src_id']
         dst_nodes_ids = edges.data['dst_id']
@@ -235,9 +246,12 @@ class NodeLevelGAT(nn.Module):
         # print('unique_en_ft.shape', unique_en_ft.shape)
         # print("edges.dst['z']", edges.dst['z'].shape)
 
-        z2 = torch.cat([en_ft, edges.dst['z']], dim=1)
+        print('en_ft',en_ft)
+        print('en_ft.shape', en_ft.shape)
+
+        z2 = torch.cat([edges.src['z'], en_ft, edges.dst['z']], dim=1)
         a = self.attn_fc(z2)
-        return {'e': F.leaky_relu(a)}
+        return {'e': F.leaky_relu(a), 'edge_type': edges.data[GNN_EDGE_TYPES_KEY]}
 
 
     def edge_attention(self, edges):
@@ -260,6 +274,8 @@ class NodeLevelGAT(nn.Module):
         print('z_src_edge_concat', z_src_edge_concat)
 
         print("edges.dst['z']", edges.dst['z'])
+
+        print('z_src_edge_concat.shape', z_src_edge_concat.shape)
         print('\n')
 
         # edge UDF for equation (2)
@@ -283,6 +299,7 @@ class NodeLevelGAT(nn.Module):
         # Equation (4)
         #   Aggregate neighbor embeddings weighted by torche attention scores (equation(4)).
         h = torch.sum(alpha * nodes.mailbox['z'], dim=1)
+        print('h', h.shape)
 
         h = self.fc2(h)
 
@@ -318,7 +335,7 @@ class NodeLevelGAT(nn.Module):
         return self.g.ndata.pop('z_node_lv')
 
 
-
+'''
 class SemLevelGAT(nn.Module):
     """
     Weight by edge type
@@ -384,16 +401,16 @@ class SemLevelGAT(nn.Module):
 
         return self.g.ndata.pop('z_final')
 
-
+'''
 
 
 
 class MultiHeadGATLayer(nn.Module):
-    def __init__(self, g, node_dim, edge_ft_out_dim, z_node_lv_dim, out_dim, num_heads, merge='cat'):
+    def __init__(self, g, node_dim, edge_ft_out_dim, out_dim, num_heads, merge='cat'):
         super(MultiHeadGATLayer, self).__init__()
         self.heads = nn.ModuleList()
         for i in range(num_heads):
-            self.heads.append(GATLayer(g, node_dim, edge_ft_out_dim, z_node_lv_dim, out_dim))
+            self.heads.append(GATLayer(g, node_dim, edge_ft_out_dim, out_dim))
         self.merge = merge
 
     def forward(self, node_features, g):
