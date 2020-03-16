@@ -20,6 +20,7 @@ data_pickle/*
 data_vocab/*
 checkpoints/*
 models/config/*
+models/layers/*__draft.py
 
 __pycache__
 **/**/*.pyc
