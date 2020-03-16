@@ -1,5 +1,5 @@
 """
-Model Interface (GAT)
+Model Interface
 """
 import copy
 import importlib
@@ -23,6 +23,9 @@ from models.layers.rgcn import RGCNLayer
 
 
 class Model(nn.Module):
+
+    # node_features_use = 'label'
+    node_features_use = 'all'
 
     def __init__(self, g, config_params, n_classes=None, n_rels=None, n_entities=None, is_cuda=False, seq_dim=None, batch_size=1, json_path=None, vocab_path=None):
         """
@@ -54,17 +57,20 @@ class Model(nn.Module):
         self.seq_dim = seq_dim # number of nodes in a sequence
         self.batch_size = batch_size
 
-        self.num_heads = 1
-        self.edge_ft_out_dim = 5        # from          (fc) edge_lbl_dim        -> edge_ft_out_dim (not used, currently use dirrectly edge_lbl_dim)
-        self.z_node_lv_dim = 5          # from          (fc) node_in_dim         -> z_node_lv_dim
-        self.gat_out_dim = self.z_node_lv_dim
-
         # print('self.g', self.g)
         # print('self.g.ndata', self.g.ndata)
-        self.node_ft_dim = self.g.ndata[GNN_NODE_LABELS_KEY].shape[1]
+        if self.node_features_use == 'all':
+            self.node_dim = self.g.ndata[GNN_NODE_TYPES_KEY].shape[1] + self.g.ndata[GNN_NODE_LABELS_KEY].shape[1]
+        elif self.node_features_use == 'label':
+            self.node_dim = self.g.ndata[GNN_NODE_LABELS_KEY].shape[1]
 
-        self.nodes_num = self.g.number_of_nodes()
-        # print('self.node_ft_dim', self.node_ft_dim)
+        self.edge_lbl_dim = self.g.edata[GNN_EDGE_LABELS_KEY].shape[1]
+
+        self.num_heads = 1
+        self.gat_out_dim = 4
+
+        # self.nodes_num = self.g.number_of_nodes()
+        # print('self.node_dim', self.node_dim)
         # print('nodes_num', self.nodes_num)
 
         self.build_model()
@@ -73,17 +79,44 @@ class Model(nn.Module):
         """
         Build NN
         """
-        self.layer1 = MultiHeadGATLayer(self.g, self.node_ft_dim, edge_ft_out_dim=self.edge_ft_out_dim, z_node_lv_dim=self.z_node_lv_dim, out_dim=self.gat_out_dim, num_heads=self.num_heads)
-        # Be aware that the input dimension is gat_out_dim*num_heads since
+        # self.layer1 = MultiHeadGATLayer(self.g, self.node_dim, edge_ft_out_dim=self.edge_lbl_dim, z_node_lv_dim=3, out_dim=self.hidden_dim, num_heads=self.num_heads)
+        # Be aware that the input dimension is hidden_dim*num_heads since
         # multiple head outputs are concatenated together. Also, only
         # one attention head in the output layer.
-        self.layer2 = MultiHeadGATLayer(self.g, self.num_heads * self.gat_out_dim, edge_ft_out_dim=self.edge_ft_out_dim, z_node_lv_dim=self.z_node_lv_dim, out_dim=self.gat_out_dim, num_heads=self.num_heads)
+        # self.layer2 = MultiHeadGATLayer(self.g, self.num_heads * self.hidden_dim, edge_ft_out_dim=self.edge_lbl_dim, z_node_lv_dim=3, out_dim=self.gat_out_dim, num_heads=self.num_heads)
+        
+        # self.layer1 = MultiHeadGATLayer(self.g, self.node_dim, self.edge_dim, out_dim=self.gat_out_dim, num_heads=self.num_heads)
+        # self.layer2 = MultiHeadGATLayer(self.g, self.num_heads * self.gat_out_dim, self.edge_dim, out_dim=self.gat_out_dim, num_heads=self.num_heads)
+        # self.layer3 = MultiHeadGATLayer(self.g, self.num_heads * self.gat_out_dim, self.edge_dim, out_dim=self.gat_out_dim, num_heads=self.num_heads)
+
+        print('\n*** Building model ***')
+        self.gat_layers = nn.ModuleList()
+        layer_params = self.config_params['layer_params']        
+
+        n_gat_layers = len(layer_params['n_heads'])
+
+        for i in range(n_gat_layers):
+            if i == 0:  # take input from GAT layer
+                node_in_dim = self.node_dim
+                edge_in_dim = self.edge_lbl_dim
+            else:
+                node_in_dim = layer_params['hidden_dim'][i-1] * layer_params['n_heads'][i-1]
+                edge_in_dim = layer_params['e_hidden_dim'][i-1] * layer_params['n_heads'][i-1]
+                # edge_in_dim = layer_params['e_hidden_dim'][i-1]
+                # edge_in_dim = self.edge_lbl_dim
+
+            print('* GAT (in_dim, out_dim, num_heads):', node_in_dim, layer_params['n_hidden_dim'][i], layer_params['e_hidden_dim'][i], layer_params['hidden_dim'][i], layer_params['n_heads'][i])
+
+            gat = MultiHeadGATLayer(self.g, node_dim=node_in_dim, edge_dim=edge_in_dim, node_ft_out_dim=layer_params['n_hidden_dim'][i], edge_ft_out_dim=layer_params['e_hidden_dim'][i], out_dim=layer_params['hidden_dim'][i], num_heads=layer_params['n_heads'][i])
+
+            self.gat_layers.append(gat)
+
 
 
         """ Classification layer """
         # print('* Building fc layer with args:', layer_params['n_units'][-1], self.n_classes)
-        # self.fc = nn.Linear(layer_params['n_units'][-1], self.n_classes)
-        self.fc = nn.Linear(self.num_heads * self.gat_out_dim, self.n_classes)
+        self.fc = nn.Linear(layer_params['n_heads'][-1]*layer_params['hidden_dim'][-1], self.n_classes)
+        # self.fc = nn.Linear(self.num_heads * self.gat_out_dim, self.n_classes)
 
         print('*** Model successfully built ***\n')
 
@@ -101,15 +134,16 @@ class Model(nn.Module):
         ############################
         # node_features = self.g.ndata[GNN_NODE_LABELS_KEY]
         self.g.ndata[GNN_NODE_TYPES_KEY] = self.g.ndata[GNN_NODE_TYPES_KEY].type(torch.cuda.FloatTensor if self.is_cuda else torch.FloatTensor)
-        self.g.ndata[GNN_NODE_LABELS_KEY] = self.g.ndata[GNN_NODE_LABELS_KEY].type(torch.cuda.FloatTensor if self.is_cuda else torch.FloatTensor)
+        self.g.ndata[GNN_NODE_LABELS_KEY] = self.g.ndata[GNN_NODE_LABELS_KEY].type(torch.cuda.FloatTensor if self.is_cuda else torch.FloatTensor).view(self.g.ndata[GNN_NODE_TYPES_KEY].shape[0], -1)
 
-        node_features = self.g.ndata[GNN_NODE_LABELS_KEY]
+        if self.node_features_use == 'all':
+            node_features = torch.cat((self.g.ndata[GNN_NODE_TYPES_KEY], self.g.ndata[GNN_NODE_LABELS_KEY]), dim=1)
+        elif self.node_features_use == 'label':
+            node_features = self.g.ndata[GNN_NODE_LABELS_KEY]
 
         # print('\tnode_features', node_features)
         # node_features = node_features.view(node_features.size()[0], -1)
-        # self.node_lbl_ft_dim = node_features.size()[1]
-        # if self.is_cuda:
-        #     node_features = node_features.cuda()
+        # self.node_dim = node_features.size()[1]
         # print('\tnode_features', node_features)
         # print('\tnode_features.shape', node_features.shape)
 
@@ -118,13 +152,11 @@ class Model(nn.Module):
         ############################
         self.g.edata[GNN_EDGE_TYPES_KEY] = self.g.edata[GNN_EDGE_TYPES_KEY].type(torch.cuda.FloatTensor if self.is_cuda else torch.FloatTensor)
         self.g.edata[GNN_EDGE_LABELS_KEY] = self.g.edata[GNN_EDGE_LABELS_KEY].type(torch.cuda.FloatTensor if self.is_cuda else torch.FloatTensor)
-        
+
         edge_features = self.g.edata[GNN_EDGE_LABELS_KEY]
         
         # edge_features = edge_features.view(edge_features.size()[0], -1)
         # self.edge_dim = edge_features.size()[1]
-        # if self.is_cuda:
-        #     edge_features = edge_features.cuda()
         # print('\tedge_features', edge_features)
         # print('\tedge_features.shape', edge_features.shape)
 
@@ -169,13 +201,29 @@ class Model(nn.Module):
 
         # print('g.ndata[GNN_NODE_TYPES_KEY].shape', g.ndata[GNN_NODE_TYPES_KEY].shape)
 
-        x = self.layer1(node_features, g)
-        x = F.elu(x)
-        x = self.layer2(x, g)
+        # x = self.layer1(node_features, edge_features, g)
+        # x = F.leaky_relu(x)
+        # x = self.layer2(x, edge_features, g)
+        # x = F.elu(x)
+        # x = self.layer3(x, edge_features, g)
+
+        for layer_idx, gat_layer in enumerate(self.gat_layers):
+            if layer_idx == 0:  # these are gat layers
+                xn = node_features
+                xe = edge_features
+
+            xn, xe = gat_layer(xn, xe, self.g)
+            # xn = gat_layer(xn, xe, self.g)
+            if layer_idx < len(self.gat_layers) - 1:
+                xn = F.leaky_relu(xn)
+                xe = F.leaky_relu(xe)
+            
 
         # x = F.elu(self.out_att(x, adj))
         # return F.log_softmax(x, dim=1)
-        self.g.ndata['att_last'] = x
+        self.g.ndata['att_last'] = xn
+
+        # print("self.g.ndata['att_last']", self.g.ndata['att_last'])
         
         # print('att_last shape', x.shape)
 
@@ -185,7 +233,7 @@ class Model(nn.Module):
         # sum with weights so that only features of last nodes is used
         # last_layer_key = 'h_' + str(len(self.layers)-1)
         last_layer_key = 'att_last'
-        sum_node = dgl.sum_nodes(g, last_layer_key)
+        sum_node = dgl.sum_nodes(self.g, last_layer_key)
         # print('\t sum_node', sum_node)
         # print('\t sum_node.shape', sum_node.shape)
 

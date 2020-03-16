@@ -18,6 +18,8 @@ import matplotlib.pyplot as plt
 import os
 from utils.utils import load_pickle, save_pickle, save_txt
 
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+
 # def collate(samples):
 #     graphs, labels = map(list, zip(*samples))
 #     batched_graph = dgl.batch(graphs)
