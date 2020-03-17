@@ -1,20 +1,20 @@
 {
-    "input_report_folder": "../../Dataset/cuckoo_ADung",
-    "input_data_folder": "/media/tunguyen/DULIEU/MinhTu/Result/node_edge_doc2vec/data_json/cuckoo_ADung",
-    "input_pickle_folder": "/media/tunguyen/DULIEU/MinhTu/Result/node_edge_doc2vec/data_pickle/cuckoo_ADung__iapi__vocablower_iapi__doc2vec",
+    "input_report_folder": "../Dataset/cuckoo_ADung",
+    "input_data_folder": "data_json/cuckoo_ADung",
+    "input_pickle_folder": "data_pickle/cuckoo_ADung__iapi__vocablower_iapi__doc2vec",
 
 
     "from_pickle": true,
     "from_report_folder": false,
     "from_data_json": false,
 
-    "vocab_path": "/media/tunguyen/DULIEU/MinhTu/Result/node_edge_doc2vec/data_vocab/vocablower_iapi",
+    "vocab_path": "data_vocab/vocablower_iapi",
     
     "use_interesting_apis": false,
     "prepend_vocab": false,
 
 
-    "train_embedding_path": "/media/tunguyen/DULIEU/MinhTu/Result/node_edge_doc2vec/data_embedding/cuckoo_ADung__iapi__doc2vec",
+    "train_embedding_path": "data_embedding/cuckoo_ADung__iapi__doc2vec",
     
     "train_embedder": false,
     "edge_embedder": "doc2vec",
@@ -38,8 +38,9 @@
     
     "model_configs": {
         "layer_params": {
-            "hidden_dim": [8,8],
-            "e_hidden_dim": [8,8],
+            "hidden_dim": [4,4],
+            "e_hidden_dim": [5,5],
+            "n_hidden_dim": [8,8],
             "n_heads": [1,1]
         }
     }

@@ -13,6 +13,8 @@ class GATLayer(nn.Module):
 
         self.weighted_agg_edge = WeightedAggEdge(g, node_dim, node_ft_out_dim, edge_dim, edge_ft_out_dim)
         self.node_lv = BaseGAT_Modified(g, node_ft_out_dim, edge_ft_out_dim, out_dim)
+        z_node_lv_dim = node_ft_out_dim + edge_ft_out_dim
+        self.semantic_lv = SemLevelGAT(g, z_node_lv_dim, out_dim)
 
 
     def forward(self, node_features, edge_features, g):
@@ -22,7 +24,8 @@ class GATLayer(nn.Module):
         # weighted-sum edges features
         z_, e_weighted = self.weighted_agg_edge(node_features, edge_features, self.g)
 
-        z_final, e_weighted = self.node_lv(z_, e_weighted, self.g)
+        z_node_lv, e_weighted = self.node_lv(z_, e_weighted, self.g)
+        z_final = self.semantic_lv(z_node_lv, self.g)
 
         return z_final, e_weighted
 
@@ -106,7 +109,7 @@ class WeightedAggEdge(nn.Module):
         self.g.ndata['node_feat'] = self.fc_n(h)
         self.g.edata['e_weighted'] = self.fc_e(e)
 
-        # self.g.group_apply_edges(func=self.edge_weight_src, group_by='src')
+        self.g.group_apply_edges(func=self.edge_weight_src, group_by='src')
         # print('~~~~~~~Done calculating e_weighted!\n------------------------')
 
         return self.g.ndata.pop('node_feat'), self.g.edata.pop('e_weighted')
@@ -122,19 +125,11 @@ class BaseGAT_Modified(nn.Module):
         self.g = g
 
         self.attn_fc = nn.Linear(node_dim + edge_ft_out_dim  +  node_dim, 1, bias=False)
-        self.sem_attn = nn.Linear(node_dim + edge_ft_out_dim, 1, bias=False)
-        self.fc2 = nn.Linear(node_dim + edge_ft_out_dim, out_dim, bias=False)
 
 
     def edge_att(self, edges):
-        en_ft = edges.data['e_weighted']
-
-        src_ft_by_type = edges.src['z']
-        en_ft_by_type = en_ft
-        dst_ft_by_type = edges.dst['z']
-
-        src_cat_edge_ft = torch.cat((src_ft_by_type, en_ft_by_type), dim=1)
-        z2 = torch.cat((src_cat_edge_ft, dst_ft_by_type), dim=1)
+        src_cat_edge_ft = torch.cat((edges.src['z'], edges.data['e_weighted']), dim=1)
+        z2 = torch.cat((src_cat_edge_ft, edges.dst['z']), dim=1)
 
         a = self.attn_fc(z2)
         return {'e': F.leaky_relu(a), 'src_cat_edge_ft': src_cat_edge_ft}
@@ -144,22 +139,6 @@ class BaseGAT_Modified(nn.Module):
         # message UDF for equation (3) & (4)
         return {'z': edges.data['src_cat_edge_ft'], 'e': edges.data['e'], 'edge_type': edges.data[GNN_EDGE_TYPES_KEY], 'src_id': edges.src['nid']}
 
-
-    def reduce_func(self, nodes):
-        ''' Node-level attention '''
-        # Equation (3)
-        #   Normalize torche attention scores using softmax (equation (3)).
-        alpha = F.softmax(nodes.mailbox['e'], dim=1)
-
-        # Equation (4)
-        #   Aggregate neighbor embeddings weighted by torche attention scores (equation(4)).
-        weighted = alpha * nodes.mailbox['z']
-        Z = torch.sum(weighted, dim=1)
-
-        ''' Final embedding '''
-        Z = self.fc2(Z)
-
-        return {'z': Z}
 
 
     def reduce_func_w_sem(self, nodes):
@@ -216,19 +195,8 @@ class BaseGAT_Modified(nn.Module):
         #   Aggregate neighbor embeddings weighted by torche attention scores (equation(4)).
         h = torch.sum(weighted_by_type, dim=1)
 
-        
 
-        ''' Semantic-level attention '''
-        w_phi = self.sem_attn(h)
-        w_phi = F.leaky_relu(w_phi)
-        beta = F.softmax(w_phi, dim=1)
-        Z = torch.sum(beta * h, dim=1)
-
-
-        ''' Final embedding '''
-        Z = self.fc2(Z)
-
-        return {'z': Z}
+        return {'z': h}
 
 
     def forward(self, h, e, g):
@@ -253,9 +221,66 @@ class BaseGAT_Modified(nn.Module):
         #   - Normalize torche attention scores using softmax (equation (3)).
         #   - Aggregate neighbor embeddings weighted by torche attention scores (equation(4)).
         self.g.update_all(self.message_func, self.reduce_func_w_sem)
-        # self.g.update_all(self.message_func, self.reduce_func)
 
         return self.g.ndata.pop('z'), self.g.edata.pop('e_weighted')
+
+
+
+class SemLevelGAT(nn.Module):
+    """
+    Weight by edge type
+    """
+    def __init__(self, g, z_node_lv_dim, out_dim):
+        super(SemLevelGAT, self).__init__()
+        self.g = g
+
+        self.sem_attn = nn.Linear(z_node_lv_dim, 1, bias=False)
+        self.fc2 = nn.Linear(z_node_lv_dim, out_dim, bias=False)
+
+    def message_func(self, edges):
+        return {'z': edges.src['z']}
+
+    def update_node(self, nodes):
+        h = nodes.data['z_final']
+        print("nodes.data['z_final']", h.shape)
+        zphi = torch.sum(h, dim=0)
+        print('zphi', zphi)
+        print('~zphi shape', zphi.shape)
+
+        ''' Semantic-level attention '''
+        w_phi = self.sem_attn(zphi)
+        print('w_phi', w_phi)
+        w_phi = F.leaky_relu(w_phi)
+        print('w_phi (leaky_relu)', w_phi)
+        print('~w_phi shape', w_phi.shape)
+        beta = F.softmax(w_phi, dim=0)
+        Z = torch.sum(beta * h, dim=1)
+        # print('w_phi', w_phi)
+        # print('w_phi', w_phi.shape)
+        print('beta', beta)
+        # print('Z', Z)
+        print('~beta shape', beta.shape)
+        print('~Z shape', Z.shape)
+
+
+        ''' Final embedding '''
+        Z = self.fc2(Z)
+        print('Z', Z)
+        print('~Z fc shape', Z.shape)
+        print('\n------------------------------------')
+
+        return {'z_final': Z}
+
+
+    def forward(self, h, g):
+        if g is not None:
+            self.g = g
+
+        self.g.ndata['z_final'] = h
+
+        self.g.apply_nodes(func=self.update_node)
+
+        return self.g.ndata.pop('z_final')
 
 
 

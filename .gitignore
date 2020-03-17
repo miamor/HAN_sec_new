@@ -8,7 +8,7 @@ data_json
 data_pickle
 data_vocab
 checkpoints
-checkpoints
+models/configs
 
 output/*
 __save_results/*
@@ -19,8 +19,9 @@ data_json/*
 data_pickle/*
 data_vocab/*
 checkpoints/*
-models/config/*
-models/layers/*__draft.py
+models/configs/*
+models/configs/*.json
+models/layers/gat__draft.py
 
 __pycache__
 **/**/*.pyc
