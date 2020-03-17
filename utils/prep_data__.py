@@ -55,19 +55,17 @@ class PrepareData(object):
     
     json_data_paths = {
         'nodes': '',
-        'proc__process_api': '',
-        'proc__file_api': '',
-        'proc__reg_api': '',
-        'file__file_api': '',
-        'reg__reg_api': ''
+        'proc_process': '',
+        'proc_file': '',
+        'proc_reg': '',
+        'proc_network': ''
     }
     json_data = {
         'nodes': {},
-        'proc__process_api': {},
-        'proc__file_api': {},
-        'proc__reg_api': {},
-        'file__file_api': {},
-        'reg__reg_api': {}
+        'proc_process': {},
+        'proc_file': {},
+        'proc_reg': {},
+        'proc_network': {}
     }
     
     word_dict_node = []
@@ -80,11 +78,9 @@ class PrepareData(object):
     api_nodes_existed = {}
 
     path_type_code = {
-        'proc__process_api': 0,
-        'proc__reg_api': 1,
-        'proc__file_api': 2,
-        'file__file_api': 3,
-        'reg__reg_api': 4
+        'proc_reg': 0,
+        'proc_file': 1,
+        'proc_process': 2
     }
     node_type_code = {
         'proc': 0, # process_handle
@@ -554,19 +550,19 @@ class PrepareData(object):
                                     
             # create an edge from parent_node to node_api if there the process_identifier is different from parent_node's pid
             if int(parent_node['pid']) != int(process_identifier):
-                self.edge(parent_node, node_api__data, args={'api_flags': api_flags, 'edge_type': 'proc__process_api'}, graph_name=graph_name, buffer_size=buffer_length)
+                self.edge(parent_node, node_api__data, args={'api_flags': api_flags, 'edge_type': 'proc_process'}, graph_name=graph_name, buffer_size=buffer_length)
             else:
                 # create edge between this node and connect_node
                 if 'Open' in api_name or 'Set' in api_name or 'Write' in api_name or 'Create' in api_name:
-                    self.edge(node_api__data, connect_node, args={'api_flags': api_flags, 'edge_type': 'proc__process_api'}, graph_name=graph_name, buffer_size=buffer_length)
+                    self.edge(node_api__data, connect_node, args={'api_flags': api_flags, 'edge_type': 'proc_process'}, graph_name=graph_name, buffer_size=buffer_length)
                 else:
-                    self.edge(connect_node, node_api__data, args={'api_flags': api_flags, 'edge_type': 'proc__process_api'}, graph_name=graph_name, buffer_size=buffer_length)
+                    self.edge(connect_node, node_api__data, args={'api_flags': api_flags, 'edge_type': 'proc_process'}, graph_name=graph_name, buffer_size=buffer_length)
         
         # Actually we don't care about those API that do not reference process_identifier to any process_identifier, so just comment these
         else:
             # create edge from this api to proc node (parent_node)
             # but because this is process, this edge is the same with the edge created above (from node_api__data to connect_node)
-            self.edge(parent_node, node_api__data, args={'api_flags': api_flags, 'edge_type': 'proc__process_api'}, graph_name=graph_name, buffer_size=buffer_length)
+            self.edge(parent_node, node_api__data, args={'api_flags': api_flags, 'edge_type': 'proc_process'}, graph_name=graph_name, buffer_size=buffer_length)
                 
 
     def process_API_file(self, api, api_info, parent_node, graph_name, graph_label):
@@ -583,7 +579,7 @@ class PrepareData(object):
             self.increase_node()
             node_api__data = {
                 'name': api['api'].lower(),
-                'type': 'file_api',
+                'type': 'process_api',
                         
                 'id': self.current_node_id,
                 'id_in_graph': self.current_node_id_of_current_graph,
@@ -635,12 +631,12 @@ class PrepareData(object):
 
             # create edge from this api node to connect_node (file handle) (file node)
             if 'Open' in api_name or 'Set' in api_name or 'Write' in api_name or 'Create' in api_name:
-                self.edge(node_api__data, connect_node, args={'edge_type': 'file__file_api'}, graph_name=graph_name, buffer_size=buffer_length)
+                self.edge(node_api__data, connect_node, args={'edge_type': 'proc_file'}, graph_name=graph_name, buffer_size=buffer_length)
             else:
-                self.edge(connect_node, node_api__data, args={'edge_type': 'file__file_api'}, graph_name=graph_name, buffer_size=buffer_length)
+                self.edge(connect_node, node_api__data, args={'edge_type': 'proc_file'}, graph_name=graph_name, buffer_size=buffer_length)
 
         # create edge from this api to proc node (parent_node)
-        self.edge(parent_node, node_api__data, args={'api_flags': api_flags, 'edge_type': 'proc__file_api'}, graph_name=graph_name)
+        self.edge(parent_node, node_api__data, args={'api_flags': api_flags, 'edge_type': 'proc_file'}, graph_name=graph_name)
 
 
 
@@ -658,7 +654,7 @@ class PrepareData(object):
             self.increase_node()
             node_api__data = {
                 'name': api['api'].lower(),
-                'type': 'reg_api',
+                'type': 'process_api',
                         
                 'id': self.current_node_id,
                 'id_in_graph': self.current_node_id_of_current_graph,
@@ -712,12 +708,12 @@ class PrepareData(object):
 
             # create edge from this api node to connect_node (file handle) (file node)
             if 'Open' in api_name or 'Set' in api_name or 'Write' in api_name or 'Create' in api_name:
-                self.edge(node_api__data, connect_node, args={'edge_type': 'reg__reg_api'}, graph_name=graph_name, buffer_size=buffer_length)
+                self.edge(node_api__data, connect_node, args={'edge_type': 'proc_reg'}, graph_name=graph_name, buffer_size=buffer_length)
             else:
-                self.edge(connect_node, node_api__data, args={'edge_type': 'reg__reg_api'}, graph_name=graph_name, buffer_size=buffer_length)
+                self.edge(connect_node, node_api__data, args={'edge_type': 'proc_reg'}, graph_name=graph_name, buffer_size=buffer_length)
 
         # create edge from this api to proc node (parent_node)
-        self.edge(parent_node, node_api__data, args={'api_flags': api_flags, 'edge_type': 'proc__reg_api'}, graph_name=graph_name)
+        self.edge(parent_node, node_api__data, args={'api_flags': api_flags, 'edge_type': 'proc_reg'}, graph_name=graph_name)
 
 
 
