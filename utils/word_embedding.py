@@ -358,6 +358,10 @@ class TFIDF(WordEmbedding):
         model = pickle.load(open("{}/{}__tfidf_model.pkl".format(self.emb_trained_path, self.type), 'rb'))
 
 
+        # Create new tfidfVectorizer with old vocabulary
+        self.tfidf = TfidfVectorizer(ngram_range=(1, 5), vocabulary=tf_saved.vocabulary_)
+
+
         ''' Load and test on this corpus set '''
         preprocessor = CSVPreprocessor(self.emb_corpus_path, False)
         corpus = preprocessor.preprocess(preprocess_level='char')
@@ -365,10 +369,9 @@ class TFIDF(WordEmbedding):
         X = [text for text, label in corpus]
         y = [label for text, label in corpus]
 
-        self.test_on_set('Corpus~', X, y, self.tfidf, model)
 
-
-        if load_train_test_set:
+        # if load_train_test_set:
+        if True: # tfidf always requires re fit 
             preprocessor = CSVPreprocessor(self.emb_trained_path)
             train_data, val_data, test_data = preprocessor.preprocess(preprocess_level='char')
             data = train_data + val_data
@@ -377,12 +380,11 @@ class TFIDF(WordEmbedding):
             x_test = [text for text, label in test_data]
             y_test = [label for text, label in test_data]
 
-            # Create new tfidfVectorizer with old vocabulary
-            self.tfidf = TfidfVectorizer(ngram_range=(1, 5), vocabulary=tf_saved.vocabulary_)
-
             self.tfidf.fit(x_train)
             x_transformed = self.test_on_set('Train~', x_train, y_train, self.tfidf, model)
             self.test_on_set('Test~', x_test, y_test, self.tfidf, model)
+
+            self.test_on_set('Corpus~', X, y, self.tfidf, model)
 
             return self.get_dict_vec(x_transformed)
 
@@ -418,7 +420,13 @@ class TFIDF(WordEmbedding):
         tfidf_vectors_to_sort = x_transformed.todense()
         self.tfidf_ordered = np.argsort(tfidf_vectors_to_sort*-1)
 
-        return self.word_to_ix, self.words
+
+        self.words_unique = []
+        for w in self.words:
+            if w not in self.words_unique:
+                self.words_unique.append(w)
+
+        return self.word_to_ix, self.words_unique
 
 
     # def transform(self, text):

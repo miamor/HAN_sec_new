@@ -67,9 +67,10 @@ def run_app(args, data, cuda):
         shutil.copy(src='utils/prep_data.py', dst=odir+'/prep_data.py')
         shutil.copy(src='utils/word_embedding.py', dst=odir+'/word_embedding.py')
         shutil.copy(src='models/model.py', dst=odir+'/model.py')
-        shutil.copy(src='models/layers/gat_.py', dst=odir+'/gat_.py')
-        shutil.copy(src='models/layers/gat_w.py', dst=odir+'/gat_w.py')
-        shutil.copy(src='models/layers/gat_nw.py', dst=odir+'/gat_nw.py')
+        files = ['gat_w', 'gat_nw', 'gat_nw_ns']
+        for fo in files:
+            shutil.copy(src='models/model_{}.py'.format(fo), dst=odir+'/model_{}v'.format(fo))
+            shutil.copy(src='models/layers/{}.py'.format(fo), dst=odir+'/{}.py'.format(fo))
         shutil.copy(src='main.py', dst=odir+'/main.py')
         shutil.copy(src='app.py', dst=odir+'/app.py')
         ''' train '''

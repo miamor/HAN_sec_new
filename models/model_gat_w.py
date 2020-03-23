@@ -1,5 +1,5 @@
 """
-Model Interface (gat_w)
+Model Interface (gat_w) (with edge weighing and semantic)
 """
 import copy
 import importlib

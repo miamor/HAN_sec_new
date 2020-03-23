@@ -1,5 +1,5 @@
 """
-Model Interface (gat_nw)
+Model Interface (gat_nw) (no edge_weighing, with semantic)
 """
 import copy
 import importlib
@@ -26,7 +26,7 @@ class Model(nn.Module):
 
     # node_features_use = 'label'
     node_features_use = 'all'
-    edge_features_use = 'all'
+    edge_features_use = 'label'
 
     def __init__(self, g, config_params, n_classes=None, n_rels=None, n_entities=None, is_cuda=False, seq_dim=None, batch_size=1, json_path=None, vocab_path=None):
         """

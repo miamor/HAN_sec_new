@@ -243,10 +243,10 @@ class PrepareData(object):
                 self.load_data_json()
 
 
-            if from_json is True:
-                print('\nTrain & load node/edge embedding')
-                self.train_and_load_embedding()
+            print('\nTrain & load node/edge embedding')
+            self.train_and_load_embedding()
 
+            if from_json is True:
                 print('\nEncode nodes & edges')
                 self.encode_data()
             
@@ -871,7 +871,7 @@ class PrepareData(object):
             os.makedirs(self.vocab_path)
         
         if not os.path.exists(self.vocab_path_node):
-            self.create_dict_node()
+            self.word_dict_node.append('other')
             self.prepend_vocab = True
         else:
             # read from dict node
@@ -880,7 +880,7 @@ class PrepareData(object):
                 self.word_dict_node = vocab.split(' ')
 
         if not os.path.exists(self.vocab_path_edge):
-            self.create_dict_edge()
+            self.word_dict_edge.append('null')
             self.prepend_vocab = True
         else:
             # read from dict edge
@@ -906,16 +906,28 @@ class PrepareData(object):
 
         if self.train_embedder:
             ''' Train embedding for edge arguments and node names '''
-            self.word_to_ix_edge, self.word_dict_edge = self.edge_embedder.train()
-            self.word_to_ix_node, self.word_dict_node = self.node_embedder.train()
+            self.word_to_ix_edge, word_dict_edge = self.edge_embedder.train()
+            self.word_to_ix_node, word_dict_node = self.node_embedder.train()
             ''' Load on this whole corpus '''
             self.edge_embedder.load(load_train_test_set=False)
             self.node_embedder.load(load_train_test_set=False)
         else:
             ''' Load tf-idf '''
             print('\n----------------Load vectorizer')
-            self.word_to_ix_edge, self.word_dict_edge = self.edge_embedder.load()
-            self.word_to_ix_node, self.word_dict_node = self.node_embedder.load()
+            self.word_to_ix_edge, word_dict_edge = self.edge_embedder.load()
+            self.word_to_ix_node, word_dict_node = self.node_embedder.load()
+
+        for w in word_dict_node:
+            if w not in self.word_dict_node:
+                self.word_dict_node.append(w)
+        for w in word_dict_edge:
+            if w not in self.word_dict_edge:
+                self.word_dict_edge.append(w)
+
+        if 'other' not in self.word_dict_node:
+            self.word_dict_node = ['other'] + self.word_dict_node
+        if 'null' not in self.word_dict_edge:
+            self.word_dict_edge = ['null'] + self.word_dict_edge
 
 
         ''' save vocab '''
@@ -1089,21 +1101,6 @@ class PrepareData(object):
         }
 
         return self.data_dortmund_format
-
-    def create_dict_node(self):
-        """
-        Create dictionary of name and arguments to encode
-        """
-        print('create dict_node')
-        self.word_dict_node.append('other')
-    
-    def create_dict_edge(self):
-        """
-        Create dictionary of name and arguments to encode
-        """
-        print('create dict_edge')
-        self.word_dict_edge.append('null')    
-
 
     def cbow_encode_node_name(self, raw_text):
         data = []
