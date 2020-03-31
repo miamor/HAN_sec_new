@@ -6,24 +6,22 @@ from utils.constants import GNN_MSG_KEY, GNN_NODE_FEAT_IN_KEY, GNN_NODE_FEAT_OUT
 
 
 class GATLayer(nn.Module):
-    def __init__(self, g, node_dim, edge_dim, node_ft_out_dim, edge_ft_out_dim, out_dim):
+    def __init__(self, g, node_dim, edge_dim, edge_ft_out_dim, out_dim):
         super(GATLayer, self).__init__()
         self.g = g
 
-        self.node_lv = NodeLevelGAT(g, node_dim, edge_dim, node_ft_out_dim, edge_ft_out_dim)
-        z_node_lv_dim = node_ft_out_dim + edge_ft_out_dim  +  node_ft_out_dim
-        # z_node_lv_dim = node_ft_out_dim + edge_ft_out_dim
-        self.semantic_lv = SemLevelGAT(g, z_node_lv_dim, out_dim)
+        self.node_lv = NodeLevelGAT(g, node_dim, edge_dim, edge_ft_out_dim, out_dim)
+        self.semantic_lv = SemLevelGAT(g, out_dim)
 
 
     def forward(self, node_features, edges_features, g):
         if g is not None:
             self.g = g
 
-        z_node_lv, e_ft = self.node_lv(node_features, edges_features, self.g)
+        z_node_lv = self.node_lv(node_features, edges_features, self.g)
         z_final = self.semantic_lv(z_node_lv, self.g)
 
-        return z_final, e_ft
+        return z_final
 
 
 
@@ -31,22 +29,21 @@ class NodeLevelGAT(nn.Module):
     """
     Weight by neighbor nodes
     """
-    def __init__(self, g, node_in_dim, edge_in_dim, node_ft_out_dim, edge_ft_out_dim):
+    def __init__(self, g, node_in_dim, edge_in_dim, edge_ft_out_dim, out_dim):
         super(NodeLevelGAT, self).__init__()
         self.g = g
 
         # equation (1)
-        self.fc_n = nn.Linear(node_in_dim, node_ft_out_dim, bias=False)
+        self.fc_n = nn.Linear(node_in_dim, out_dim, bias=False)
         self.fc_e = nn.Linear(edge_in_dim, edge_ft_out_dim, bias=False)
-        print('`~~~edge_in_dim', edge_in_dim)
         # equation (2)
-        self.attn_fc = nn.Linear(node_ft_out_dim + edge_ft_out_dim  +  node_ft_out_dim, 1, bias=False)
+        self.attn_fc = nn.Linear(out_dim + edge_ft_out_dim  +  out_dim, 1, bias=False)
         # outdim
-        # self.fc2 = nn.Linear(node_ft_out_dim + edge_ft_out_dim  +  node_ft_out_dim, node_ft_out_dim, bias=False)
+        self.fc2 = nn.Linear(out_dim + edge_ft_out_dim, out_dim, bias=False)
 
 
         # self.attn_fc = nn.Linear(node_in_dim + edge_in_dim  +  node_in_dim, 1, bias=False)
-        # self.fc2 = nn.Linear(node_in_dim + edge_in_dim, node_ft_out_dim, bias=False)
+        # self.fc2 = nn.Linear(node_in_dim + edge_in_dim, out_dim, bias=False)
 
         self.nodes_updated = 0
 
@@ -68,13 +65,10 @@ class NodeLevelGAT(nn.Module):
     def message_func(self, edges):
         # message UDF for equation (3) & (4)
         # print("edges.data['e']", edges.data['e'])
-        src_node_n_edge_ft__fc = edges.data['zne']
-        z = torch.cat([src_node_n_edge_ft__fc, edges.dst['z']], dim=1)
-        return {'z_src': src_node_n_edge_ft__fc, 'z': z, 'e': edges.data['e'], 'edge_type': edges.data[GNN_EDGE_TYPES_KEY]}
+        return {'z': edges.data['zne'], 'e': edges.data['e'], 'edge_type': edges.data[GNN_EDGE_TYPES_KEY]}
 
     def reduce_func(self, nodes):
 
-        # z = nodes.mailbox['z_src']
         z = nodes.mailbox['z']
         e = nodes.mailbox['e']
         e_type = nodes.mailbox['edge_type']
@@ -106,9 +100,8 @@ class NodeLevelGAT(nn.Module):
         # Equation (4)
         #   Aggregate neighbor embeddings weighted by torche attention scores (equation(4)).
         h = torch.sum(weighted_by_type, dim=1)
-        # h = torch.cat(h, nodes.data['z'], dim=1)
 
-        # h = self.fc2(h)
+        h = self.fc2(h)
 
         # print('h', h.shape)
 
@@ -144,7 +137,7 @@ class NodeLevelGAT(nn.Module):
 
         # print('nodes_updated', self.nodes_updated)
 
-        return self.g.ndata.pop('z'), self.g.edata.pop('e_ft')
+        return self.g.ndata.pop('z')
 
 
 
@@ -152,12 +145,11 @@ class SemLevelGAT(nn.Module):
     """
     Weight by edge type
     """
-    def __init__(self, g, z_node_lv_dim, out_dim):
+    def __init__(self, g, z_node_lv_dim):
         super(SemLevelGAT, self).__init__()
         self.g = g
 
         self.sem_attn = nn.Linear(z_node_lv_dim, 1, bias=False)
-        self.fc2 = nn.Linear(z_node_lv_dim, out_dim, bias=False)
 
     def message_func(self, edges):
         return {'z': edges.src['z']}
@@ -172,7 +164,6 @@ class SemLevelGAT(nn.Module):
         beta = F.softmax(w_phi, dim=0)
         Z = torch.sum(beta * h, dim=1)
 
-        Z = self.fc2(Z)
 
         return {'z_final': Z}
 
@@ -192,26 +183,26 @@ class SemLevelGAT(nn.Module):
 
 
 class MultiHeadGATLayer(nn.Module):
-    def __init__(self, g, node_dim, edge_dim, node_ft_out_dim, edge_ft_out_dim, out_dim, num_heads, merge='cat'):
+    def __init__(self, g, node_dim, edge_dim, edge_ft_out_dim, out_dim, num_heads, merge='cat'):
         super(MultiHeadGATLayer, self).__init__()
         self.heads = nn.ModuleList()
         for i in range(num_heads):
-            self.heads.append(GATLayer(g, node_dim, edge_dim, node_ft_out_dim, edge_ft_out_dim, out_dim))
+            self.heads.append(GATLayer(g, node_dim, edge_dim, edge_ft_out_dim, out_dim))
         self.merge = merge
 
-    def forward(self, node_features, edge_features, g):
-        # print('self.heads~~~', self.heads)
+        print('self.heads~~~', self.heads)
 
-        n_head_outs = []
-        e_head_outs = []
-        for attn_head in self.heads:
-            n_head_out, e_head_out = attn_head(node_features, edge_features, g)
-            n_head_outs.append(n_head_out)
-            e_head_outs.append(e_head_out)
-
+    def forward(self, node_features, edges_features, g):
+        # head_outs = []
+        # for attn_head in self.heads:
+        #     head_out = attn_head(node_features, g)
+        #     head_outs.append(head_out)
+        #     print('head_out~~~', head_out)
+        
+        head_outs = [attn_head(node_features, edges_features, g) for attn_head in self.heads]
         if self.merge == 'cat':
-            # concat on torche output feature dimension (dim=1)
-            return torch.cat(n_head_outs, dim=1), torch.cat(e_head_outs, dim=1)
+            # concat on the output feature dimension (dim=1)
+            return torch.cat(head_outs, dim=1)
         else:
             # merge using average
-            return torch.mean(torch.stack(n_head_outs)), torch.mean(torch.stack(e_head_outs))
+            return torch.mean(torch.stack(head_outs))

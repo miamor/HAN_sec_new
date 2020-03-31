@@ -67,7 +67,7 @@ def run_app(args, data, cuda):
         shutil.copy(src='utils/prep_data.py', dst=odir+'/prep_data.py')
         shutil.copy(src='utils/word_embedding.py', dst=odir+'/word_embedding.py')
         shutil.copy(src='models/model.py', dst=odir+'/model.py')
-        files = ['gat_w', 'gat_nw', 'gat_nw_ns']
+        files = ['gat_w', 'gat_nw', 'gat_nw_ns', 'edgnn']
         for fo in files:
             shutil.copy(src='models/model_{}.py'.format(fo), dst=odir+'/model_{}v'.format(fo))
             shutil.copy(src='models/layers/{}.py'.format(fo), dst=odir+'/{}.py'.format(fo))
@@ -169,15 +169,16 @@ if __name__ == "__main__":
         cuda = False
     else:
         cuda = True
+        print('cuda', cuda)
         torch.cuda.set_device(args['gpu'])
 
 
-    config_params = read_params(args['config_fpath'], verbose=True)
+    config_params = read_params(args['config_fpath'], verbose=False)
     # combine arguments from config file and args
     for key in args:
         config_params[key] = args[key]
 
-    if not config_params['prepend_vocab'] and not config_params['vocab_path']:
+    if 'prepend_vocab' in config_params and not config_params['prepend_vocab'] and not config_params['vocab_path']:
         raise AssertionError('prepend_vocab (-pv) cannot be off when no vocab_path is parsed (-v)')
 
 

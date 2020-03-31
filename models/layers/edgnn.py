@@ -3,6 +3,7 @@ edGNN layer (add link to the paper)
 """
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from utils.inits import reset, init_weights
 from utils.utils import reset_graph_features
@@ -71,6 +72,7 @@ class edGNNLayer(nn.Module):
         # print('input_dim', input_dim)
         # print('self.out_feats', self.out_feats)
         self.linear = nn.Linear(input_dim, self.out_feats, bias=self.bias)
+        # self.attn_fc = nn.Linear(input_dim, 1, bias=False)
 
         # Dropout module
         if self.dropout:
@@ -86,7 +88,16 @@ class edGNNLayer(nn.Module):
             # print('edges.data[GNN_EDGE_FEAT_KEY]', edges.data[GNN_EDGE_FEAT_KEY])
             # print(edges.src[GNN_NODE_FEAT_IN_KEY].shape)
             # print(edges.data[GNN_EDGE_FEAT_KEY].shape)
+
             msg = torch.cat([edges.src[GNN_NODE_FEAT_IN_KEY], edges.data[GNN_EDGE_FEAT_KEY]], dim=1)
+
+            # z_src = torch.cat([edges.src[GNN_NODE_FEAT_IN_KEY], edges.data[GNN_EDGE_FEAT_KEY]], dim=1)
+            # zd = torch.cat([z_src, edges.dst[GNN_NODE_FEAT_IN_KEY]], dim=1)
+            # a = self.attn_fc(zd)
+            # e = F.leaky_relu(a)
+            # alpha = F.softmax(e, dim=1)
+            # msg = alpha * z_src
+            
             if self.dropout:
                 msg = self.dropout(msg)
         else:

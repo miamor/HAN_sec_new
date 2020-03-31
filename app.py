@@ -42,7 +42,6 @@ class App:
         self.data = data
         self.model_config = model_config
         # max length of a sequence (max nodes among graphs)
-        self.seq_max_length = data[MAX_N_NODES]
         self.learning_config = learning_config
         self.pretrained_weight = pretrained_weight
         self.is_cuda = learning_config['cuda']
@@ -57,6 +56,7 @@ class App:
         self.data_graph = self.data[GRAPH]
 
         # save nid and eid to nodes & edges
+        # print('self.data_graph[0]', self.data_graph[0])
         if 'nid' not in self.data_graph[0].ndata:
         # if True:
             for k,g in enumerate(self.data_graph):
@@ -83,10 +83,14 @@ class App:
                            n_rels=data_nrels,
                            n_entities=data_nentities,
                            is_cuda=self.is_cuda,
-                           seq_dim=self.seq_max_length,
                            batch_size=1,
                            json_path=json_path,
                            vocab_path=vocab_path)
+
+        if self.is_cuda is True:
+            # self.model.cuda()
+            print('Use cuda')
+            self.model.to(torch.device('cuda'))
 
 
         print('*** Model parameters ***')
@@ -230,9 +234,6 @@ class App:
             optimizer = torch.optim.Adam(self.model.parameters(),
                                          lr=self.learning_config['lr'],
                                          weight_decay=self.learning_config['weight_decay'])
-
-            if self.learning_config['cuda']:
-                self.model.cuda()
 
             start = int(len(g_train)/K) * k
             end = int(len(g_train)/K) * (k+1)

@@ -28,7 +28,7 @@ class Model(nn.Module):
     node_features_use = 'all'
     edge_features_use = 'all'
 
-    def __init__(self, g, config_params, n_classes=None, n_rels=None, n_entities=None, is_cuda=False, seq_dim=None, batch_size=1, json_path=None, vocab_path=None):
+    def __init__(self, g, config_params, n_classes=None, n_rels=None, n_entities=None, is_cuda=False, batch_size=1, json_path=None, vocab_path=None):
         """
         Instantiate a graph neural network.
 
@@ -55,7 +55,7 @@ class Model(nn.Module):
         self.g = g
         # merge all graphs
 
-        self.seq_dim = seq_dim # number of nodes in a sequence
+        # self.seq_dim = seq_dim # number of nodes in a sequence
         self.batch_size = batch_size
 
         # print('self.g', self.g)

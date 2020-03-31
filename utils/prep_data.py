@@ -218,7 +218,7 @@ class PrepareData(object):
         self.from_folder = from_folder
         if from_pickle is True:
             print('\nTrain & load node/edge embedding')
-            self.train_and_load_embedding()
+            # self.train_and_load_embedding()
 
             print('Load data from pickle folder')
             self.load_from_pickle()
@@ -900,8 +900,9 @@ class PrepareData(object):
             self.node_embedder.save_corpus(self.node_name_embedding_data_csv)
         else:
             # Copy corpus file from emb_trained_path
-            shutil.copy(self.edge_args_emb_trained_path+'/corpus.csv', self.edge_args_emb_corpus_path+'/corpus.csv')
-            shutil.copy(self.node_name_emb_trained_path+'/corpus.csv', self.node_name_emb_corpus_path+'/corpus.csv')
+            if not os.path.exists(self.edge_args_emb_corpus_path+'/corpus.csv'):
+                shutil.copy(self.edge_args_emb_trained_path+'/corpus.csv', self.edge_args_emb_corpus_path+'/corpus.csv')
+                shutil.copy(self.node_name_emb_trained_path+'/corpus.csv', self.node_name_emb_corpus_path+'/corpus.csv')
 
 
         if self.train_embedder:

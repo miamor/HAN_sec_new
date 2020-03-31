@@ -81,27 +81,27 @@ class Model(nn.Module):
         ############################
         print('\n*** Building model ***')
 
-        ''' because self.g[0].ndata[GNN_NODE_LABELS_KEY] will be passed through Embedding layer '''
+        ''' because self.g.ndata[GNN_NODE_LABELS_KEY] will be passed through Embedding layer '''
         if self.node_features_use == 'all':
             ''' use TYPES + LABELS as features '''
-            self.node_dim = self.g[0].ndata[GNN_NODE_TYPES_KEY].shape[1] + self.g[0].ndata[GNN_NODE_LABELS_KEY].shape[1]
+            self.node_dim = self.g.ndata[GNN_NODE_TYPES_KEY].shape[1] + self.g.ndata[GNN_NODE_LABELS_KEY].shape[1]
         elif self.node_features_use == 'type':
             ''' use TYPES as features '''
-            self.node_dim = self.g[0].ndata[GNN_NODE_TYPES_KEY].shape[1]
+            self.node_dim = self.g.ndata[GNN_NODE_TYPES_KEY].shape[1]
         elif self.node_features_use == 'label':
             ''' use LABELS as features '''
-            self.node_dim = self.g[0].ndata[GNN_NODE_LABELS_KEY].shape[1]
+            self.node_dim = self.g.ndata[GNN_NODE_LABELS_KEY].shape[1]
 
         if self.edge_features_use == 'all':
             ''' use TYPES + LABELS as features '''
-            self.edge_dim = self.g[0].edata[GNN_EDGE_TYPES_KEY].shape[1] + self.g[0].edata[GNN_EDGE_LABELS_KEY].shape[1]
-            # self.edge_dim = self.g[0].edata[GNN_EDGE_TYPES_KEY].shape[1] + self.g[0].edata[GNN_EDGE_LABELS_KEY].shape[1] + self.g[0].edata[GNN_EDGE_BUFFER_SIZE_KEY].shape[1]
+            self.edge_dim = self.g.edata[GNN_EDGE_TYPES_KEY].shape[1] + self.g.edata[GNN_EDGE_LABELS_KEY].shape[1]
+            # self.edge_dim = self.g.edata[GNN_EDGE_TYPES_KEY].shape[1] + self.g.edata[GNN_EDGE_LABELS_KEY].shape[1] + self.g.edata[GNN_EDGE_BUFFER_SIZE_KEY].shape[1]
         elif self.edge_features_use == 'type':
             ''' use TYPES as features '''
-            self.edge_dim = self.g[0].edata[GNN_EDGE_TYPES_KEY].shape[1]
+            self.edge_dim = self.g.edata[GNN_EDGE_TYPES_KEY].shape[1]
         elif self.edge_features_use == 'label':
             ''' use LABELS as features '''
-            self.edge_dim = self.g[0].edata[GNN_EDGE_LABELS_KEY].shape[1]
+            self.edge_dim = self.g.edata[GNN_EDGE_LABELS_KEY].shape[1]
 
         print('self.node_dim, self.edge_dim', self.node_dim, self.edge_dim)
 

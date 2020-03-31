@@ -28,7 +28,7 @@ class Model(nn.Module):
     node_features_use = 'all'
     edge_features_use = 'label'
 
-    def __init__(self, g, config_params, n_classes=None, n_rels=None, n_entities=None, is_cuda=False, seq_dim=None, batch_size=1, json_path=None, vocab_path=None):
+    def __init__(self, g, config_params, n_classes=None, n_rels=None, n_entities=None, is_cuda=False, batch_size=1, json_path=None, vocab_path=None):
         """
         Instantiate a graph neural network.
 
@@ -55,7 +55,7 @@ class Model(nn.Module):
         self.g = g
         # merge all graphs
 
-        self.seq_dim = seq_dim # number of nodes in a sequence
+        # self.seq_dim = seq_dim # number of nodes in a sequence
         self.batch_size = batch_size
 
         # print('self.g', self.g)
@@ -103,13 +103,17 @@ class Model(nn.Module):
 
         for i in range(n_gat_layers):
             if i == 0:  # take input from GAT layer
-                print('* GAT (in_dim, out_dim, num_heads):', self.node_dim, self.edge_dim, layer_params['e_hidden_dim'][i], layer_params['hidden_dim'][i], layer_params['n_heads'][i])
-
-                gat = MultiHeadGATLayer(self.g, self.node_dim, self.edge_dim, edge_ft_out_dim=layer_params['e_hidden_dim'][i], out_dim=layer_params['hidden_dim'][i], num_heads=layer_params['n_heads'][i])
+                node_in_dim = self.node_dim
+                edge_in_dim = self.edge_dim
             else:
-                print('* GAT (in_dim, out_dim, num_heads):', layer_params['hidden_dim'][i-1] * layer_params['n_heads'][i-1], self.edge_dim, layer_params['e_hidden_dim'][i], layer_params['hidden_dim'][i], layer_params['n_heads'][i])
+                node_in_dim = layer_params['hidden_dim'][i-1] * layer_params['n_heads'][i-1]
+                edge_in_dim = layer_params['e_hidden_dim'][i-1] * layer_params['n_heads'][i-1]
+                # edge_in_dim = layer_params['e_hidden_dim'][i-1]
+                # edge_in_dim = self.edge_lbl_dim
 
-                gat = MultiHeadGATLayer(self.g, layer_params['hidden_dim'][i-1] * layer_params['n_heads'][i-1], self.edge_dim, edge_ft_out_dim=layer_params['e_hidden_dim'][i], out_dim=layer_params['hidden_dim'][i], num_heads=layer_params['n_heads'][i])
+            print('* GAT (in_dim, out_dim, num_heads):', node_in_dim, layer_params['n_hidden_dim'][i], layer_params['e_hidden_dim'][i], layer_params['hidden_dim'][i], layer_params['n_heads'][i])
+
+            gat = MultiHeadGATLayer(self.g, node_dim=node_in_dim, edge_dim=edge_in_dim, node_ft_out_dim=layer_params['n_hidden_dim'][i], edge_ft_out_dim=layer_params['e_hidden_dim'][i], out_dim=layer_params['hidden_dim'][i], num_heads=layer_params['n_heads'][i])
 
             self.gat_layers.append(gat)
 
@@ -118,7 +122,6 @@ class Model(nn.Module):
         """ Classification layer """
         # print('* Building fc layer with args:', layer_params['n_units'][-1], self.n_classes)
         self.fc = nn.Linear(layer_params['n_heads'][-1]*layer_params['hidden_dim'][-1], self.n_classes)
-        # self.fc = nn.Linear(self.num_heads * self.gat_out_dim, self.n_classes)
 
         print('*** Model successfully built ***\n')
 
@@ -216,16 +219,18 @@ class Model(nn.Module):
 
         for layer_idx, gat_layer in enumerate(self.gat_layers):
             if layer_idx == 0:  # these are gat layers
-                x = node_features
+                xn = node_features
+                xe = edge_features
 
-            x = gat_layer(x, edge_features, g)
+            xn, xe = gat_layer(xn, xe, g)
             if layer_idx < len(self.gat_layers) - 1:
-                x = F.leaky_relu(x)
+                xn = F.leaky_relu(xn)
+                xe = F.leaky_relu(xe)
             
 
         # x = F.elu(self.out_att(x, adj))
         # return F.log_softmax(x, dim=1)
-        self.g.ndata['att_last'] = x
+        self.g.ndata['att_last'] = xn
         
         # print('att_last shape', x.shape)
 
